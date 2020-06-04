@@ -9,3 +9,5 @@ edition = "2018"
 [dependencies]
 iced = { version = "0.1.1", features = ["debug"] }
 iced_native = "0.2.2"
+walkdir = "2.3.1"
+mime_guess = "2.0.3"
