@@ -11,7 +11,7 @@ use walkdir::WalkDir;
 mod file;
 mod styles;
 
-use file::{File, FileMessage, FileState};
+use file::{AnalyzeResult, File, FileMessage};
 
 fn is_video(path: &PathBuf) -> bool {
     let guess = mime_guess::from_path(path);
@@ -30,39 +30,67 @@ pub fn main() {
     App::run(settings)
 }
 
+#[derive(Debug, Clone)]
+enum Message {
+    EventOccurred(iced_native::Event),
+    FileMessage(u64, FileMessage),
+    FileAnalyzed(u64, AnalyzeResult),
+}
+
 #[derive(Debug, Default)]
 struct App {
+    id_counter: u64,
     hovering_with_files: bool,
     files: Vec<File>,
     file_scrollable: scrollable::State,
 }
 
 impl App {
-    pub fn add_path(&mut self, path: PathBuf) {
+    fn get_id(&mut self) -> u64 {
+        let id = self.id_counter;
+        self.id_counter += 1;
+        id
+    }
+
+    pub fn add_path(&mut self, path: PathBuf) -> Vec<Command<Message>> {
+        let mut commands = Vec::new();
+
         if path.is_dir() {
             for entry in WalkDir::new(path) {
                 let file_path = entry.unwrap().path().to_owned();
 
                 if is_video(&file_path) {
+                    let id = self.get_id();
+
+                    commands.push(Command::perform(
+                        File::analyze_file(id, file_path.clone()),
+                        move |result| Message::FileAnalyzed(id, result),
+                    ));
+
                     self.files.push(File {
+                        id,
                         path: file_path,
-                        state: FileState::default(),
+                        ..Default::default()
                     });
                 }
             }
         } else if is_video(&path) {
+            let id = self.get_id();
+
+            commands.push(Command::perform(
+                File::analyze_file(id.clone(), path.clone()),
+                move |result| Message::FileAnalyzed(id, result),
+            ));
+
             self.files.push(File {
-                state: FileState::default(),
+                id,
                 path,
+                ..Default::default()
             });
         }
-    }
-}
 
-#[derive(Debug, Clone)]
-enum Message {
-    EventOccurred(iced_native::Event),
-    FileMessage(usize, FileMessage),
+        commands
+    }
 }
 
 impl Application for App {
@@ -89,9 +117,19 @@ impl Application for App {
                 }
                 Event::Window(WindowEvent::FileDropped(path)) => {
                     self.hovering_with_files = false;
-                    self.add_path(path);
+                    let commands = self.add_path(path);
+
+                    return Command::batch(commands);
                 }
                 _ => {}
+            },
+            Message::FileAnalyzed(id, result) => match result {
+                Ok(analysis) => {
+                    if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
+                        file.update(FileMessage::Analyzed(analysis));
+                    }
+                }
+                Err(_) => {}
             },
             Message::FileMessage(_idx, _msg) => todo!(),
         };
@@ -104,15 +142,17 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let files = self.files.iter_mut().enumerate().fold(
-            Column::new().spacing(10),
-            |column, (i, file)| {
+        let files = self
+            .files
+            .iter_mut()
+            .fold(Column::new().spacing(10), |column, file| {
+                let id = file.id;
+
                 column.push(
                     file.view()
-                        .map(move |message| Message::FileMessage(i, message)),
+                        .map(move |message| Message::FileMessage(id, message)),
                 )
-            },
-        );
+            });
 
         let content = Scrollable::new(&mut self.file_scrollable)
             .width(Length::Fill)
