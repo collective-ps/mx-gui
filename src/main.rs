@@ -52,6 +52,10 @@ impl App {
         id
     }
 
+    pub fn contains_path(&self, path: &PathBuf) -> bool {
+        self.files.iter().find(|file| &file.path == path).is_some()
+    }
+
     pub fn add_path(&mut self, path: PathBuf) -> Vec<Command<Message>> {
         let mut commands = Vec::new();
 
@@ -59,7 +63,7 @@ impl App {
             for entry in WalkDir::new(path) {
                 let file_path = entry.unwrap().path().to_owned();
 
-                if is_video(&file_path) {
+                if is_video(&file_path) && !self.contains_path(&file_path) {
                     let id = self.get_id();
 
                     commands.push(Command::perform(
@@ -74,7 +78,7 @@ impl App {
                     });
                 }
             }
-        } else if is_video(&path) {
+        } else if is_video(&path) && !self.contains_path(&path) {
             let id = self.get_id();
 
             commands.push(Command::perform(
