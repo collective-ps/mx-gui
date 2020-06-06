@@ -138,7 +138,6 @@ impl Application for App {
                 }
                 Err(_) => {}
             },
-            Message::FileMessage(_idx, _msg) => todo!(),
             Message::NextScene => {
                 self.current_scene = Scenes::FileIndex;
             }
