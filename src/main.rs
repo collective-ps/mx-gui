@@ -15,7 +15,7 @@ mod widgets;
 
 use message::Message;
 use scenes::Scenes;
-use widgets::file::{File, FileMessage};
+use widgets::file::{self, File, FileMessage};
 
 fn is_video(path: &PathBuf) -> bool {
     let guess = mime_guess::from_path(path);
@@ -145,6 +145,7 @@ impl Application for App {
             Message::ApiKeyInputChanged(new_value) => {
                 self.api_key = new_value;
             }
+            Message::Noop => {}
         };
 
         Command::none()
@@ -195,21 +196,22 @@ impl Application for App {
                     .into()
             }
             Scenes::FileIndex => {
-                let files =
-                    self.files
-                        .iter_mut()
-                        .fold(Column::new().spacing(10), |column, file| {
-                            let id = file.id;
+                let is_empty = self.files.is_empty();
 
-                            column.push(
-                                file.view()
-                                    .map(move |message| Message::FileMessage(id, message)),
-                            )
-                        });
+                let file_index = file::file_index(self.files.iter()).map(|_| Message::Noop);
 
-                let content = Scrollable::new(&mut self.file_scrollable)
+                let file_scroll_view = Scrollable::new(&mut self.file_scrollable)
                     .width(Length::Fill)
-                    .push(files);
+                    .push(file_index);
+
+                let content = if is_empty {
+                    Column::new().push(Text::new("Drag and drop files here").color(Color::WHITE))
+                } else {
+                    Column::new()
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .push(file_scroll_view)
+                };
 
                 Container::new(content)
                     .width(Length::Fill)
@@ -217,6 +219,8 @@ impl Application for App {
                     .style(styles::Container {
                         hovered: self.hovering_with_files,
                     })
+                    .center_x()
+                    .center_y()
                     .into()
             }
         }

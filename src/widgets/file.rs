@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use iced::{Column, Container, Element, Length, Text};
+use iced::{Column, Container, Element, Length, Row};
+
+use crate::styles;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -45,19 +47,34 @@ pub enum AnalyzeError {
 
 pub type AnalyzeResult = Result<FileAnalysis, AnalyzeError>;
 
-impl File {
-  pub fn view(&mut self) -> Element<FileMessage> {
-    let content = if self.md5.is_some() {
-      Column::new()
-        .push(Text::new(format!("{}", self.path.display())).size(14))
-        .push(Text::new(format!("Checksum: {:x}", self.md5.unwrap())).size(14))
-    } else {
-      Column::new()
-        .push(Text::new(format!("{}", self.path.display())).size(14))
-        .push(Text::new("Calculating MD5 checksum...").size(14))
-    };
+pub fn file_index<'a, I>(files: I) -> Element<'a, FileMessage>
+where
+  I: Iterator<Item = &'a File>,
+{
+  let mut file_names = Column::new().spacing(2).push(styles::text("File Name"));
+  let mut md5 = Column::new().spacing(2).push(styles::text("MD5"));
 
-    Container::new(content).width(Length::Fill).into()
+  for file in files {
+    file_names = file_names.push(styles::text(file.file_name()));
+    md5 = md5.push(styles::text(file.get_md5()));
+  }
+
+  let content = Row::new().push(file_names).push(md5).width(Length::Fill);
+
+  Container::new(content).width(Length::Fill).into()
+}
+
+impl File {
+  fn file_name(&self) -> &str {
+    self.path.file_name().unwrap().to_str().unwrap()
+  }
+
+  fn get_md5(&self) -> String {
+    if self.md5.is_some() {
+      format!("{:x}", self.md5.unwrap())
+    } else {
+      "Not calculated".to_string()
+    }
   }
 
   pub fn update(&mut self, message: FileMessage) {

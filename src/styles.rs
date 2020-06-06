@@ -1,4 +1,4 @@
-use iced::{button, container, text_input, Background, Color};
+use iced::{button, container, text_input, Background, Color, Text};
 
 const SURFACE: Color = Color::from_rgb(
   0x21 as f32 / 255.0,
@@ -17,6 +17,10 @@ const HOVERED: Color = Color::from_rgb(
   0x42 as f32 / 255.0,
   0x42 as f32 / 255.0,
 );
+
+pub fn text<T: Into<String>>(label: T) -> Text {
+  Text::new(label).color(Color::WHITE).size(12)
+}
 
 pub struct Container {
   pub hovered: bool,

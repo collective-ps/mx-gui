@@ -7,4 +7,5 @@ pub enum Message {
   FileAnalyzed(u64, AnalyzeResult),
   ApiKeyInputChanged(String),
   NextScene,
+  Noop,
 }
