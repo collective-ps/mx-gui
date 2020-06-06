@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use iced::{
-    executor, scrollable, Application, Column, Command, Container, Element, Length, Scrollable,
-    Settings, Subscription,
+    button, executor, scrollable, text_input, Align, Application, Button, Color, Column, Command,
+    Container, Element, Length, Scrollable, Settings, Subscription, Text, TextInput,
 };
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
@@ -35,6 +35,20 @@ enum Message {
     EventOccurred(iced_native::Event),
     FileMessage(u64, FileMessage),
     FileAnalyzed(u64, AnalyzeResult),
+    ApiKeyInputChanged(String),
+    NextScene,
+}
+
+#[derive(Debug)]
+enum Scenes {
+    Index,
+    FileIndex,
+}
+
+impl Default for Scenes {
+    fn default() -> Self {
+        Self::Index
+    }
 }
 
 #[derive(Debug, Default)]
@@ -43,6 +57,12 @@ struct App {
     hovering_with_files: bool,
     files: Vec<File>,
     file_scrollable: scrollable::State,
+    current_scene: Scenes,
+    next_button: button::State,
+
+    // Scenes::Index
+    api_key_input: text_input::State,
+    api_key: String,
 }
 
 impl App {
@@ -136,6 +156,12 @@ impl Application for App {
                 Err(_) => {}
             },
             Message::FileMessage(_idx, _msg) => todo!(),
+            Message::NextScene => {
+                self.current_scene = Scenes::FileIndex;
+            }
+            Message::ApiKeyInputChanged(new_value) => {
+                self.api_key = new_value;
+            }
         };
 
         Command::none()
@@ -146,28 +172,70 @@ impl Application for App {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let files = self
-            .files
-            .iter_mut()
-            .fold(Column::new().spacing(10), |column, file| {
-                let id = file.id;
+        match self.current_scene {
+            Scenes::Index => {
+                let mut button = Column::new()
+                    .push(Text::new("spin-archive.org - MX").color(Color::WHITE))
+                    .push(
+                        TextInput::new(
+                            &mut self.api_key_input,
+                            "API key",
+                            &self.api_key,
+                            Message::ApiKeyInputChanged,
+                        )
+                        .style(styles::TextInput::Primary)
+                        .padding(8),
+                    )
+                    .max_width(300)
+                    .spacing(12)
+                    .align_items(Align::Center);
 
-                column.push(
-                    file.view()
-                        .map(move |message| Message::FileMessage(id, message)),
-                )
-            });
+                if self.api_key.len() > 5 {
+                    button = button.push(
+                        Button::new(&mut self.next_button, Text::new("Next"))
+                            .padding(8)
+                            .style(styles::Button::Primary)
+                            .on_press(Message::NextScene),
+                    );
+                }
 
-        let content = Scrollable::new(&mut self.file_scrollable)
-            .width(Length::Fill)
-            .push(files);
+                let container = Container::new(button)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
+                    .center_y();
 
-        Container::new(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(styles::Container {
-                hovered: self.hovering_with_files,
-            })
-            .into()
+                Container::new(container)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(styles::Container { hovered: false })
+                    .into()
+            }
+            Scenes::FileIndex => {
+                let files =
+                    self.files
+                        .iter_mut()
+                        .fold(Column::new().spacing(10), |column, file| {
+                            let id = file.id;
+
+                            column.push(
+                                file.view()
+                                    .map(move |message| Message::FileMessage(id, message)),
+                            )
+                        });
+
+                let content = Scrollable::new(&mut self.file_scrollable)
+                    .width(Length::Fill)
+                    .push(files);
+
+                Container::new(content)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(styles::Container {
+                        hovered: self.hovering_with_files,
+                    })
+                    .into()
+            }
+        }
     }
 }
