@@ -8,10 +8,14 @@ use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
 use walkdir::WalkDir;
 
-mod file;
+mod message;
+mod scenes;
 mod styles;
+mod widgets;
 
-use file::{AnalyzeResult, File, FileMessage};
+use message::Message;
+use scenes::Scenes;
+use widgets::file::{File, FileMessage};
 
 fn is_video(path: &PathBuf) -> bool {
     let guess = mime_guess::from_path(path);
@@ -28,27 +32,6 @@ pub fn main() {
     settings.default_font = Some(include_bytes!("../fonts/SourceCodePro-Regular.ttf"));
 
     App::run(settings)
-}
-
-#[derive(Debug, Clone)]
-enum Message {
-    EventOccurred(iced_native::Event),
-    FileMessage(u64, FileMessage),
-    FileAnalyzed(u64, AnalyzeResult),
-    ApiKeyInputChanged(String),
-    NextScene,
-}
-
-#[derive(Debug)]
-enum Scenes {
-    Index,
-    FileIndex,
-}
-
-impl Default for Scenes {
-    fn default() -> Self {
-        Self::Index
-    }
 }
 
 #[derive(Debug, Default)]
