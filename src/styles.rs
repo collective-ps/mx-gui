@@ -1,4 +1,4 @@
-use iced::{button, container, text_input, Background, Color, Text, Vector};
+use iced::{button, container, text_input, Background, Color};
 
 const SURFACE: Color = Color::from_rgb(
   0x21 as f32 / 255.0,

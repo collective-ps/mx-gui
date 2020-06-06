@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use iced::{Column, Container, Element, Length, Text};
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum FileState {
   Analyzing,
