@@ -19,7 +19,7 @@ const HOVERED: Color = Color::from_rgb(
 );
 
 pub fn text<T: Into<String>>(label: T) -> Text {
-  Text::new(label).color(Color::WHITE).size(12)
+  Text::new(label).color(Color::WHITE).size(14)
 }
 
 pub struct Container {

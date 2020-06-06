@@ -145,6 +145,11 @@ impl Application for App {
                 self.api_key = new_value;
             }
             Message::Noop => {}
+            Message::FileMessage(id, message) => {
+                if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
+                    file.update(message);
+                }
+            }
         };
 
         Command::none()
@@ -197,7 +202,7 @@ impl Application for App {
             Scenes::FileIndex => {
                 let is_empty = self.files.is_empty();
 
-                let file_index = file::file_index(self.files.iter()).map(|_| Message::Noop);
+                let file_index = file::file_index(self.files.iter_mut());
 
                 let file_scroll_view = Scrollable::new(&mut self.file_scrollable)
                     .width(Length::Fill)
