@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Configuration used for making API requests.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
   pub host: String,
   pub api_token: String,
@@ -34,11 +34,11 @@ pub enum ApiError {
   ServerUnavailable,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct User {
-  id: i32,
-  username: String,
-  role: String,
+  pub id: i32,
+  pub username: String,
+  pub role: String,
 }
 
 impl User {

@@ -22,11 +22,17 @@ pub fn text<T: Into<String>>(label: T) -> Text {
   Text::new(label).color(Color::WHITE).size(14)
 }
 
-pub struct Container {
+pub struct HoveredContainer {
   pub hovered: bool,
 }
 
-impl container::StyleSheet for Container {
+impl HoveredContainer {
+  pub fn new(hovered: bool) -> Self {
+    Self { hovered }
+  }
+}
+
+impl container::StyleSheet for HoveredContainer {
   fn style(&self) -> container::Style {
     if self.hovered {
       container::Style {
@@ -38,6 +44,23 @@ impl container::StyleSheet for Container {
         background: Some(Background::Color(SURFACE)),
         ..container::Style::default()
       }
+    }
+  }
+}
+
+pub enum Container {
+  Primary,
+  Secondary,
+}
+
+impl container::StyleSheet for Container {
+  fn style(&self) -> container::Style {
+    container::Style {
+      background: Some(match self {
+        Container::Primary => Background::Color(SURFACE),
+        Container::Secondary => Background::Color(ACTIVE),
+      }),
+      ..container::Style::default()
     }
   }
 }

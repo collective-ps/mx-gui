@@ -1,3 +1,4 @@
+use crate::api::{Config, User};
 use crate::scenes::WelcomeMessage;
 use crate::widgets::file::{AnalyzeResult, FileMessage};
 
@@ -7,6 +8,6 @@ pub enum Message {
   FileAnalyzed(u64, AnalyzeResult),
   FileMessage(u64, FileMessage),
   WelcomeMessage(WelcomeMessage),
-  NextScene,
+  SetConfigAndUser(Config, User),
   Noop,
 }

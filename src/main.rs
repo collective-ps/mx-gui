@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use iced::{
-    button, executor, scrollable, Application, Color, Column, Command, Container, Element, Length,
-    Scrollable, Settings, Subscription, Text,
+    button, executor, scrollable, Align, Application, Color, Column, Command, Container, Element,
+    HorizontalAlignment, Length, Scrollable, Settings, Subscription, Text, VerticalAlignment,
 };
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
@@ -14,6 +14,7 @@ mod scenes;
 mod styles;
 mod widgets;
 
+use api::{Config, User};
 use message::Message;
 use scenes::{Scenes, WelcomeScene};
 use widgets::file::{self, File, FileMessage};
@@ -42,6 +43,10 @@ struct App {
     files: Vec<File>,
     file_scrollable: scrollable::State,
     next_button: button::State,
+
+    // API
+    current_user: Option<User>,
+    current_config: Option<Config>,
 
     // Scenes
     current_scene: Scenes,
@@ -140,9 +145,6 @@ impl Application for App {
                 }
                 Err(_) => {}
             },
-            Message::NextScene => {
-                self.current_scene = Scenes::FileIndex;
-            }
             Message::Noop => {}
             Message::FileMessage(id, message) => {
                 if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
@@ -151,6 +153,11 @@ impl Application for App {
             }
             Message::WelcomeMessage(msg) => {
                 return self.welcome_scene.update(msg);
+            }
+            Message::SetConfigAndUser(config, user) => {
+                self.current_config = Some(config);
+                self.current_user = Some(user);
+                self.current_scene = Scenes::FileIndex;
             }
         };
 
@@ -171,23 +178,48 @@ impl Application for App {
 
                 let file_scroll_view = Scrollable::new(&mut self.file_scrollable)
                     .width(Length::Fill)
+                    .height(Length::FillPortion(5))
                     .push(file_index);
 
+                let bottom_bar = Container::new(
+                    styles::text(format!(
+                        "Logged in as: {}",
+                        self.current_user.as_ref().unwrap().username
+                    ))
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .vertical_alignment(VerticalAlignment::Center),
+                )
+                .height(Length::Units(30))
+                .width(Length::Fill)
+                .padding(6)
+                .style(styles::Container::Secondary);
+
                 let content = if is_empty {
-                    Column::new().push(Text::new("Drag and drop files here").color(Color::WHITE))
+                    Column::new()
+                        .push(
+                            Container::new(
+                                Text::new("Drag and drop files here").color(Color::WHITE),
+                            )
+                            .height(Length::FillPortion(5))
+                            .width(Length::Fill)
+                            .center_x()
+                            .center_y(),
+                        )
+                        .push(bottom_bar)
+                        .align_items(Align::Center)
                 } else {
                     Column::new()
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .push(file_scroll_view)
+                        .push(bottom_bar)
                 };
 
                 Container::new(content)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .style(styles::Container {
-                        hovered: self.hovering_with_files,
-                    })
+                    .style(styles::HoveredContainer::new(self.hovering_with_files))
                     .center_x()
                     .center_y()
                     .into()

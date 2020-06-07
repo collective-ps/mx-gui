@@ -32,6 +32,7 @@ impl WelcomeScene {
       WelcomeMessage::SetDisplayError(error) => self.error = Some(error),
       WelcomeMessage::NextScene => {
         let api_key = self.api_key.clone();
+        let config = api::Config::new(api_key.clone());
 
         let cmd = Command::perform(
           async move {
@@ -39,8 +40,8 @@ impl WelcomeScene {
             let response = api::User::get(&config).await;
             response
           },
-          |resp| match resp {
-            Ok(_) => Message::NextScene,
+          move |resp| match resp {
+            Ok(user) => Message::SetConfigAndUser(config.clone(), user),
             Err(e) => Message::WelcomeMessage(WelcomeMessage::SetDisplayError(e.to_string())),
           },
         );
@@ -91,7 +92,7 @@ impl WelcomeScene {
     Container::new(container)
       .width(Length::Fill)
       .height(Length::Fill)
-      .style(styles::Container { hovered: false })
+      .style(styles::Container::Primary)
       .into()
   }
 }
