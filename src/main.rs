@@ -8,6 +8,7 @@ use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
 use walkdir::WalkDir;
 
+mod api;
 mod message;
 mod scenes;
 mod styles;

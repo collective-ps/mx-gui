@@ -109,7 +109,7 @@ where
 
 impl File {
   fn truncated_file_name(&self) -> String {
-    let truncation = 50;
+    let truncation = 75;
     let name = self.path.file_name().unwrap().to_str().unwrap();
     let length = name.chars().count();
 
