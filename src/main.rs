@@ -15,7 +15,7 @@ mod styles;
 mod widgets;
 
 use message::Message;
-use scenes::Scenes;
+use scenes::{Scenes, WelcomeScene};
 use widgets::file::{self, File, FileMessage};
 
 fn is_video(path: &PathBuf) -> bool {
@@ -41,12 +41,13 @@ struct App {
     hovering_with_files: bool,
     files: Vec<File>,
     file_scrollable: scrollable::State,
-    current_scene: Scenes,
     next_button: button::State,
 
-    // Scenes::Index
-    api_key_input: text_input::State,
-    api_key: String,
+    // Scenes
+    current_scene: Scenes,
+
+    // Scenes::Welcome
+    welcome_scene: WelcomeScene,
 }
 
 impl App {
@@ -142,14 +143,13 @@ impl Application for App {
             Message::NextScene => {
                 self.current_scene = Scenes::FileIndex;
             }
-            Message::ApiKeyInputChanged(new_value) => {
-                self.api_key = new_value;
-            }
-            Message::Noop => {}
             Message::FileMessage(id, message) => {
                 if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
                     file.update(message);
                 }
+            }
+            Message::WelcomeMessage(msg) => {
+                return self.welcome_scene.update(msg);
             }
         };
 
@@ -162,44 +162,7 @@ impl Application for App {
 
     fn view(&mut self) -> Element<Message> {
         match self.current_scene {
-            Scenes::Index => {
-                let mut button = Column::new()
-                    .push(Text::new("spin-archive.org - MX").color(Color::WHITE))
-                    .push(
-                        TextInput::new(
-                            &mut self.api_key_input,
-                            "API key",
-                            &self.api_key,
-                            Message::ApiKeyInputChanged,
-                        )
-                        .style(styles::TextInput::Primary)
-                        .padding(8),
-                    )
-                    .max_width(300)
-                    .spacing(12)
-                    .align_items(Align::Center);
-
-                if self.api_key.len() > 5 {
-                    button = button.push(
-                        Button::new(&mut self.next_button, Text::new("Next"))
-                            .padding(8)
-                            .style(styles::Button::Primary)
-                            .on_press(Message::NextScene),
-                    );
-                }
-
-                let container = Container::new(button)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_x()
-                    .center_y();
-
-                Container::new(container)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(styles::Container { hovered: false })
-                    .into()
-            }
+            Scenes::Welcome => self.welcome_scene.view().map(Message::WelcomeMessage),
             Scenes::FileIndex => {
                 let is_empty = self.files.is_empty();
 
