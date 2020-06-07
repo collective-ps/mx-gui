@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 
-use iced::{text_input, Column, Container, Element, Length, Row, TextInput};
+use iced::{button, text_input, Column, Container, Element, Length, Row, TextInput};
 
 use crate::message::Message;
 use crate::styles;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileState {
   Analyzing,
   Analyzed,
+  CheckingDuplicate,
   Pending,
   Uploading,
   Succeeded,
@@ -28,6 +29,7 @@ impl std::fmt::Display for FileState {
     match *self {
       FileState::Analyzing => write!(f, "Analyzing"),
       FileState::Analyzed => write!(f, "Analyzed"),
+      FileState::CheckingDuplicate => write!(f, "Checking Duplicate"),
       FileState::Pending => write!(f, "Pending"),
       FileState::Uploading => write!(f, "Uploading"),
       FileState::Succeeded => write!(f, "Succeeded"),
@@ -45,6 +47,7 @@ pub struct File {
   pub md5: Option<md5::Digest>,
   pub tags: String,
   pub tag_input: text_input::State,
+  pub button: button::State,
 }
 
 #[derive(Debug, Clone)]
@@ -81,9 +84,12 @@ where
 
   for file in files {
     let id = file.id;
-    file_names = file_names.push(styles::text(file.truncated_file_name()));
+    let file_md5 = file.get_md5();
+    let file_name = file.truncated_file_name();
+
+    file_names = file_names.push(styles::text(file_name));
     status = status.push(styles::text(file.state.to_string()));
-    md5 = md5.push(styles::text(file.get_md5()));
+    md5 = md5.push(styles::text(file_md5));
     tags = tags.push(
       TextInput::new(
         &mut file.tag_input,
@@ -123,11 +129,11 @@ impl File {
   }
 
   #[allow(dead_code)]
-  fn file_name(&self) -> &str {
+  pub fn file_name(&self) -> &str {
     self.path.file_name().unwrap().to_str().unwrap()
   }
 
-  fn get_md5(&self) -> String {
+  pub fn get_md5(&self) -> String {
     if self.md5.is_some() {
       format!("{:x}", self.md5.unwrap())
     } else {

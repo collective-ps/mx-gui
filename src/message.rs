@@ -9,5 +9,6 @@ pub enum Message {
   FileMessage(u64, FileMessage),
   WelcomeMessage(WelcomeMessage),
   SetConfigAndUser(Config, User),
+  DuplicateCheckResponse(Vec<String>),
   Noop,
 }

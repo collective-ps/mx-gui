@@ -2,7 +2,7 @@ mod welcome;
 
 pub use welcome::{WelcomeMessage, WelcomeScene};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Scenes {
   Welcome,
   FileIndex,

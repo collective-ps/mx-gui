@@ -1,6 +1,7 @@
 use reqwest::{Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 
 /// Configuration used for making API requests.
@@ -49,6 +50,27 @@ impl User {
       .get(&endpoint)
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
+      .send()
+      .await;
+
+    handle_response(response).await
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Checksums {
+  pub checksums: Vec<String>,
+}
+
+impl Checksums {
+  pub async fn check(checksums: &Vec<String>, config: &Config) -> Result<Self, ApiError> {
+    let endpoint = format!("{}/api/v1/uploads/checksum", config.host);
+
+    let response = Client::new()
+      .post(&endpoint)
+      .header("content-type", "application/json")
+      .header("authorization", format!("Bearer {}", config.api_token))
+      .json(&json!({ "checksums": checksums }))
       .send()
       .await;
 

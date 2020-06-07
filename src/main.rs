@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use iced::{
     button, executor, scrollable, Align, Application, Color, Column, Command, Container, Element,
-    HorizontalAlignment, Length, Scrollable, Settings, Subscription, Text, VerticalAlignment,
+    Length, Scrollable, Settings, Subscription, Text, VerticalAlignment,
 };
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
@@ -17,7 +17,7 @@ mod widgets;
 use api::{Config, User};
 use message::Message;
 use scenes::{Scenes, WelcomeScene};
-use widgets::file::{self, File, FileMessage};
+use widgets::file::{self, File, FileMessage, FileState};
 
 fn is_video(path: &PathBuf) -> bool {
     let guess = mime_guess::from_path(path);
@@ -130,10 +130,12 @@ impl Application for App {
                     self.hovering_with_files = false;
                 }
                 Event::Window(WindowEvent::FileDropped(path)) => {
-                    self.hovering_with_files = false;
-                    let commands = self.add_path(path);
+                    if self.current_scene == Scenes::FileIndex {
+                        self.hovering_with_files = false;
+                        let commands = self.add_path(path);
 
-                    return Command::batch(commands);
+                        return Command::batch(commands);
+                    }
                 }
                 _ => {}
             },
@@ -141,6 +143,30 @@ impl Application for App {
                 Ok(analysis) => {
                     if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
                         file.update(FileMessage::Analyzed(analysis));
+                    }
+
+                    let all_files_analyzed = self
+                        .files
+                        .iter()
+                        .all(|file| file.state != FileState::Analyzing);
+
+                    if all_files_analyzed {
+                        let checksums: Vec<String> = self
+                            .files
+                            .iter()
+                            .filter(|file| file.state == FileState::Analyzed)
+                            .map(|file| file.get_md5())
+                            .collect();
+
+                        let config = self.current_config.clone().unwrap();
+
+                        return Command::perform(
+                            async move { api::Checksums::check(&checksums, &config).await },
+                            |response| match response {
+                                Ok(response) => Message::DuplicateCheckResponse(response.checksums),
+                                Err(_) => Message::Noop,
+                            },
+                        );
                     }
                 }
                 Err(_) => {}
@@ -158,6 +184,15 @@ impl Application for App {
                 self.current_config = Some(config);
                 self.current_user = Some(user);
                 self.current_scene = Scenes::FileIndex;
+            }
+            Message::DuplicateCheckResponse(checksums) => {
+                for checksum in checksums.iter() {
+                    for file in self.files.iter_mut() {
+                        if file.get_md5() == *checksum {
+                            file.state = FileState::Duplicate;
+                        }
+                    }
+                }
             }
         };
 

@@ -67,14 +67,16 @@ impl container::StyleSheet for Container {
 
 pub enum Button {
   Primary,
+  Transparent,
 }
 
 impl button::StyleSheet for Button {
   fn active(&self) -> button::Style {
     button::Style {
-      background: Some(Background::Color(match self {
-        Button::Primary => ACTIVE,
-      })),
+      background: match self {
+        Button::Primary => Some(Background::Color(ACTIVE)),
+        Button::Transparent => None,
+      },
       border_radius: 2,
       text_color: Color::WHITE,
       ..button::Style::default()
@@ -83,9 +85,10 @@ impl button::StyleSheet for Button {
 
   fn hovered(&self) -> button::Style {
     button::Style {
-      background: Some(Background::Color(match self {
-        Button::Primary => HOVERED,
-      })),
+      background: match self {
+        Button::Primary => Some(Background::Color(HOVERED)),
+        Button::Transparent => None,
+      },
       ..self.active()
     }
   }
