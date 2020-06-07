@@ -122,6 +122,7 @@ impl File {
     }
   }
 
+  #[allow(dead_code)]
   fn file_name(&self) -> &str {
     self.path.file_name().unwrap().to_str().unwrap()
   }

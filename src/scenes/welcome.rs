@@ -3,6 +3,7 @@ use iced::{
   TextInput,
 };
 
+use crate::api;
 use crate::message::Message;
 use crate::styles;
 
@@ -11,26 +12,48 @@ pub struct WelcomeScene {
   api_key: String,
   api_key_input: text_input::State,
   next_button: button::State,
+  error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub enum WelcomeMessage {
   ApiKeyInputChanged(String),
+  SetDisplayError(String),
   NextScene,
 }
 
 impl WelcomeScene {
   pub fn update(&mut self, message: WelcomeMessage) -> Command<Message> {
     match message {
-      WelcomeMessage::ApiKeyInputChanged(new_value) => self.api_key = new_value,
-      WelcomeMessage::NextScene => return Command::perform(async {}, |_| Message::NextScene),
+      WelcomeMessage::ApiKeyInputChanged(new_value) => {
+        self.api_key = new_value;
+        self.error = None;
+      }
+      WelcomeMessage::SetDisplayError(error) => self.error = Some(error),
+      WelcomeMessage::NextScene => {
+        let api_key = self.api_key.clone();
+
+        let cmd = Command::perform(
+          async move {
+            let config = api::Config::new(api_key);
+            let response = api::User::get(&config).await;
+            response
+          },
+          |resp| match resp {
+            Ok(_) => Message::NextScene,
+            Err(e) => Message::WelcomeMessage(WelcomeMessage::SetDisplayError(e.to_string())),
+          },
+        );
+
+        return cmd;
+      }
     };
 
     Command::none()
   }
 
   pub fn view(&mut self) -> Element<WelcomeMessage> {
-    let mut button = Column::new()
+    let mut welcome = Column::new()
       .push(Text::new("spin-archive.org - MX").color(Color::WHITE))
       .push(
         TextInput::new(
@@ -46,8 +69,12 @@ impl WelcomeScene {
       .spacing(12)
       .align_items(Align::Center);
 
+    if let Some(error_msg) = self.error.as_ref() {
+      welcome = welcome.push(Text::new(error_msg).color(Color::WHITE));
+    }
+
     if self.api_key.len() > 5 {
-      button = button.push(
+      welcome = welcome.push(
         Button::new(&mut self.next_button, Text::new("Next"))
           .padding(8)
           .style(styles::Button::Primary)
@@ -55,7 +82,7 @@ impl WelcomeScene {
       );
     }
 
-    let container = Container::new(button)
+    let container = Container::new(welcome)
       .width(Length::Fill)
       .height(Length::Fill)
       .center_x()

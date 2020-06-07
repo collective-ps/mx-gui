@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use iced::{
-    button, executor, scrollable, text_input, Align, Application, Button, Color, Column, Command,
-    Container, Element, Length, Scrollable, Settings, Subscription, Text, TextInput,
+    button, executor, scrollable, Application, Color, Column, Command, Container, Element, Length,
+    Scrollable, Settings, Subscription, Text,
 };
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
@@ -143,6 +143,7 @@ impl Application for App {
             Message::NextScene => {
                 self.current_scene = Scenes::FileIndex;
             }
+            Message::Noop => {}
             Message::FileMessage(id, message) => {
                 if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
                     file.update(message);

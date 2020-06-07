@@ -8,4 +8,5 @@ pub enum Message {
   FileMessage(u64, FileMessage),
   WelcomeMessage(WelcomeMessage),
   NextScene,
+  Noop,
 }

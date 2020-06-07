@@ -1,4 +1,5 @@
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, Response, StatusCode};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -9,11 +10,11 @@ pub struct Config {
   pub api_token: String,
 }
 
-impl Default for Config {
-  fn default() -> Self {
+impl Config {
+  pub fn new(api_token: String) -> Self {
     Self {
+      api_token,
       host: "https://spin-archive.org".to_owned(),
-      ..Default::default()
     }
   }
 }
@@ -28,9 +29,12 @@ pub enum ApiError {
 
   #[error("Error decoding JSON")]
   JsonError,
+
+  #[error("Server is unreachable at this time")]
+  ServerUnavailable,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct User {
   id: i32,
   username: String,
@@ -48,21 +52,29 @@ impl User {
       .send()
       .await;
 
-    match response {
-      Ok(response) => match response.json().await {
-        Ok(json) => Ok(json),
-        Err(_) => Err(ApiError::JsonError),
-      },
-      Err(error) => {
-        if let Some(status) = error.status() {
-          match status {
-            StatusCode::FORBIDDEN => Err(ApiError::ApiKeyError),
-            _ => Err(ApiError::NotFound),
+    handle_response(response).await
+  }
+}
+
+async fn handle_response<T: DeserializeOwned>(
+  response: Result<Response, reqwest::Error>,
+) -> Result<T, ApiError> {
+  match response {
+    Ok(response) => match response.status() {
+      StatusCode::FORBIDDEN => {
+        return Err(ApiError::ApiKeyError);
+      }
+      status => {
+        if status.is_success() {
+          match response.json().await {
+            Ok(json) => Ok(json),
+            Err(_) => Err(ApiError::JsonError),
           }
         } else {
           Err(ApiError::NotFound)
         }
       }
-    }
+    },
+    Err(_) => Err(ApiError::ServerUnavailable),
   }
 }
