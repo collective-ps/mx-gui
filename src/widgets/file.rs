@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use iced::{button, text_input, Column, Container, Element, Length, Row, TextInput};
+use iced::{button, text_input, Column, Container, Element, Length, Row};
 
 use crate::message::Message;
 use crate::styles;
@@ -13,7 +13,7 @@ pub enum FileState {
   CheckingDuplicate,
   Pending,
   Uploading,
-  Succeeded,
+  Completed,
   Failed,
   Duplicate,
 }
@@ -32,7 +32,7 @@ impl std::fmt::Display for FileState {
       FileState::CheckingDuplicate => write!(f, "Checking Duplicate"),
       FileState::Pending => write!(f, "Pending"),
       FileState::Uploading => write!(f, "Uploading"),
-      FileState::Succeeded => write!(f, "Succeeded"),
+      FileState::Completed => write!(f, "Completed"),
       FileState::Failed => write!(f, "Failed"),
       FileState::Duplicate => write!(f, "Duplicate"),
     }
@@ -53,7 +53,6 @@ pub struct File {
 #[derive(Debug, Clone)]
 pub enum FileMessage {
   Analyzed(FileAnalysis),
-  TagChanged(String),
 }
 
 #[derive(Debug, Clone)]
@@ -70,36 +69,20 @@ pub enum AnalyzeError {
 
 pub type AnalyzeResult = Result<FileAnalysis, AnalyzeError>;
 
-pub fn file_index<'a, I>(files: I) -> Element<'a, Message>
-where
-  I: Iterator<Item = &'a mut File>,
-{
+pub fn file_index<'a>(files: Vec<&File>) -> Element<'a, Message> {
   let mut file_names = Column::new().spacing(2).push(styles::text("File Name"));
   let mut status = Column::new().spacing(2).push(styles::text("Status"));
   let mut md5 = Column::new().spacing(2).push(styles::text("MD5"));
-  let mut tags = Column::new()
-    .spacing(2)
-    .width(Length::Fill)
-    .push(styles::text("Tags"));
+  let mut tags = Column::new().spacing(2).push(styles::text("Tags"));
 
-  for file in files {
-    let id = file.id;
+  for file in files.iter() {
     let file_md5 = file.get_md5();
     let file_name = file.truncated_file_name();
 
     file_names = file_names.push(styles::text(file_name));
     status = status.push(styles::text(file.state.to_string()));
     md5 = md5.push(styles::text(file_md5));
-    tags = tags.push(
-      TextInput::new(
-        &mut file.tag_input,
-        "Enter tags",
-        &file.tags,
-        move |string| Message::FileMessage(id, FileMessage::TagChanged(string)),
-      )
-      .style(styles::TextInput::Primary)
-      .size(14),
-    )
+    tags = tags.push(styles::text(&file.tags));
   }
 
   let content = Row::new()
@@ -147,7 +130,6 @@ impl File {
         self.md5 = Some(analysis.md5);
         self.state = FileState::Analyzed;
       }
-      FileMessage::TagChanged(tags) => self.tags = tags,
     }
   }
 

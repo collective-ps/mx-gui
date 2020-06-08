@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use iced::{
-    button, executor, scrollable, Align, Application, Color, Column, Command, Container, Element,
-    Length, Scrollable, Settings, Subscription, Text, VerticalAlignment,
+    button, executor, scrollable, Align, Application, Button, Color, Column, Command, Container,
+    Element, Length, Row, Scrollable, Settings, Subscription, Text, VerticalAlignment,
 };
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
@@ -15,7 +15,7 @@ mod styles;
 mod widgets;
 
 use api::{Config, User};
-use message::Message;
+use message::{Filter, Message};
 use scenes::{Scenes, WelcomeScene};
 use widgets::file::{self, File, FileMessage, FileState};
 
@@ -42,7 +42,13 @@ struct App {
     hovering_with_files: bool,
     files: Vec<File>,
     file_scrollable: scrollable::State,
-    next_button: button::State,
+
+    current_filter: Filter,
+
+    pending_button: button::State,
+    duplicate_button: button::State,
+    completed_button: button::State,
+    failed_button: button::State,
 
     // API
     current_user: Option<User>,
@@ -105,6 +111,43 @@ impl App {
 
         commands
     }
+
+    pub fn pending(&self) -> Vec<&File> {
+        self.files
+            .iter()
+            .filter(|file| {
+                vec![
+                    FileState::Analyzing,
+                    FileState::Analyzed,
+                    FileState::Pending,
+                    FileState::CheckingDuplicate,
+                    FileState::Uploading,
+                ]
+                .contains(&file.state)
+            })
+            .collect()
+    }
+
+    pub fn duplicate(&self) -> Vec<&File> {
+        self.files
+            .iter()
+            .filter(|file| file.state == FileState::Duplicate)
+            .collect()
+    }
+
+    pub fn completed(&self) -> Vec<&File> {
+        self.files
+            .iter()
+            .filter(|file| file.state == FileState::Completed)
+            .collect()
+    }
+
+    pub fn failed(&self) -> Vec<&File> {
+        self.files
+            .iter()
+            .filter(|file| file.state == FileState::Failed)
+            .collect()
+    }
 }
 
 impl Application for App {
@@ -157,13 +200,16 @@ impl Application for App {
                             .filter(|file| file.state == FileState::Analyzed)
                             .map(|file| file.get_md5())
                             .collect();
-
+                        let requested_checksums = checksums.clone();
                         let config = self.current_config.clone().unwrap();
 
                         return Command::perform(
-                            async move { api::Checksums::check(&checksums, &config).await },
-                            |response| match response {
-                                Ok(response) => Message::DuplicateCheckResponse(response.checksums),
+                            async move { api::Checksums::check(&requested_checksums, &config).await },
+                            move |response| match response {
+                                Ok(response) => Message::DuplicateCheckResponse(
+                                    checksums.clone(),
+                                    response.checksums,
+                                ),
                                 Err(_) => Message::Noop,
                             },
                         );
@@ -185,14 +231,29 @@ impl Application for App {
                 self.current_user = Some(user);
                 self.current_scene = Scenes::FileIndex;
             }
-            Message::DuplicateCheckResponse(checksums) => {
-                for checksum in checksums.iter() {
-                    for file in self.files.iter_mut() {
-                        if file.get_md5() == *checksum {
+            Message::DuplicateCheckResponse(checksums, duplicate_checksums) => {
+                for file in self.files.iter_mut() {
+                    let file_checksum = file.get_md5();
+                    let part_of_original_request = checksums
+                        .iter()
+                        .find(|checksum| file_checksum == **checksum)
+                        .is_some();
+                    let is_duplicate = duplicate_checksums
+                        .iter()
+                        .find(|checksum| file_checksum == **checksum)
+                        .is_some();
+
+                    if part_of_original_request {
+                        if is_duplicate {
                             file.state = FileState::Duplicate;
+                        } else {
+                            file.state = FileState::Pending;
                         }
                     }
                 }
+            }
+            Message::SetFilter(filter) => {
+                self.current_filter = filter;
             }
         };
 
@@ -207,9 +268,24 @@ impl Application for App {
         match self.current_scene {
             Scenes::Welcome => self.welcome_scene.view().map(Message::WelcomeMessage),
             Scenes::FileIndex => {
+                let pending = self.pending();
+                let duplicate = self.duplicate();
+                let completed = self.completed();
+                let failed = self.failed();
+                let pending_count = pending.len();
+                let duplicate_count = duplicate.len();
+                let completed_count = completed.len();
+                let failed_count = failed.len();
                 let is_empty = self.files.is_empty();
 
-                let file_index = file::file_index(self.files.iter_mut());
+                let files = match self.current_filter {
+                    Filter::Pending => pending,
+                    Filter::Duplicate => duplicate,
+                    Filter::Completed => completed,
+                    Filter::Failed => failed,
+                };
+
+                let file_index = file::file_index(files);
 
                 let file_scroll_view = Scrollable::new(&mut self.file_scrollable)
                     .width(Length::Fill)
@@ -230,6 +306,49 @@ impl Application for App {
                 .padding(6)
                 .style(styles::Container::Secondary);
 
+                let filter_bar = Row::new()
+                    .width(Length::Fill)
+                    .height(Length::Units(30))
+                    .spacing(24)
+                    .push(
+                        Button::new(
+                            &mut self.pending_button,
+                            styles::text(format!("Pending ({})", pending_count)),
+                        )
+                        .on_press(Message::SetFilter(Filter::Pending))
+                        .style(styles::Button::Transparent),
+                    )
+                    .push(
+                        Button::new(
+                            &mut self.duplicate_button,
+                            styles::text(format!("Duplicate ({})", duplicate_count)),
+                        )
+                        .on_press(Message::SetFilter(Filter::Duplicate))
+                        .style(styles::Button::Transparent),
+                    )
+                    .push(
+                        Button::new(
+                            &mut self.completed_button,
+                            styles::text(format!("Completed ({})", completed_count)),
+                        )
+                        .on_press(Message::SetFilter(Filter::Completed))
+                        .style(styles::Button::Transparent),
+                    )
+                    .push(
+                        Button::new(
+                            &mut self.failed_button,
+                            styles::text(format!("Failed ({})", failed_count)),
+                        )
+                        .on_press(Message::SetFilter(Filter::Failed))
+                        .style(styles::Button::Transparent),
+                    );
+
+                let top_view = Row::new()
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .padding(6)
+                    .push(file_scroll_view);
+
                 let content = if is_empty {
                     Column::new()
                         .push(
@@ -247,7 +366,8 @@ impl Application for App {
                     Column::new()
                         .width(Length::Fill)
                         .height(Length::Fill)
-                        .push(file_scroll_view)
+                        .push(filter_bar)
+                        .push(top_view)
                         .push(bottom_bar)
                 };
 
