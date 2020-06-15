@@ -87,7 +87,7 @@ impl button::StyleSheet for Button {
     button::Style {
       background: match self {
         Button::Primary => Some(Background::Color(HOVERED)),
-        Button::Transparent => None,
+        Button::Transparent => Some(Background::Color(HOVERED)),
       },
       ..self.active()
     }

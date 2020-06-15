@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use iced::{button, text_input, Column, Container, Element, Length, Row};
+use iced::{
+  button, text_input, Button, Column, Container, Element, Length, Row, VerticalAlignment,
+};
 
 use crate::message::Message;
 use crate::styles;
@@ -16,6 +18,7 @@ pub enum FileState {
   Completed,
   Failed,
   Duplicate,
+  Queued,
 }
 
 impl Default for FileState {
@@ -35,6 +38,7 @@ impl std::fmt::Display for FileState {
       FileState::Completed => write!(f, "Completed"),
       FileState::Failed => write!(f, "Failed"),
       FileState::Duplicate => write!(f, "Duplicate"),
+      FileState::Queued => write!(f, "Queued"),
     }
   }
 }
@@ -69,20 +73,38 @@ pub enum AnalyzeError {
 
 pub type AnalyzeResult = Result<FileAnalysis, AnalyzeError>;
 
-pub fn file_index<'a>(files: Vec<&File>) -> Element<'a, Message> {
-  let mut file_names = Column::new().spacing(2).push(styles::text("File Name"));
-  let mut status = Column::new().spacing(2).push(styles::text("Status"));
-  let mut md5 = Column::new().spacing(2).push(styles::text("MD5"));
-  let mut tags = Column::new().spacing(2).push(styles::text("Tags"));
+pub fn file_index<'a>(files: Vec<&'a mut File>) -> Element<'a, Message> {
+  let mut file_names = Column::new()
+    .spacing(2)
+    .push(styles::text("File Name").vertical_alignment(VerticalAlignment::Center))
+    .height(Length::Fill);
+  let mut status = Column::new()
+    .spacing(2)
+    .push(styles::text("Status").vertical_alignment(VerticalAlignment::Center))
+    .height(Length::Fill);
+  let mut md5 = Column::new()
+    .spacing(2)
+    .push(styles::text("MD5").vertical_alignment(VerticalAlignment::Center))
+    .height(Length::Fill);
+  let mut tags = Column::new()
+    .spacing(2)
+    .push(styles::text("Tags").vertical_alignment(VerticalAlignment::Center))
+    .height(Length::Fill);
 
-  for file in files.iter() {
+  for file in files {
     let file_md5 = file.get_md5();
     let file_name = file.truncated_file_name();
 
-    file_names = file_names.push(styles::text(file_name));
-    status = status.push(styles::text(file.state.to_string()));
-    md5 = md5.push(styles::text(file_md5));
-    tags = tags.push(styles::text(&file.tags));
+    file_names = file_names.push(
+      Button::new(&mut file.button, styles::text(file_name))
+        .style(styles::Button::Transparent)
+        .padding(0),
+    );
+    status = status.push(Container::new(styles::text(file.state.to_string())).height(Length::Fill));
+    md5 = md5.push(Container::new(styles::text(file_md5)).height(Length::Fill));
+    tags = tags
+      .push(Container::new(styles::text(&file.tags)))
+      .height(Length::Fill);
   }
 
   let content = Row::new()

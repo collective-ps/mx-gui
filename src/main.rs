@@ -9,6 +9,7 @@ use iced_native::Event;
 use walkdir::WalkDir;
 
 mod api;
+mod config;
 mod message;
 mod scenes;
 mod styles;
@@ -46,6 +47,7 @@ struct App {
     current_filter: Filter,
 
     pending_button: button::State,
+    queued_button: button::State,
     duplicate_button: button::State,
     completed_button: button::State,
     failed_button: button::State,
@@ -112,9 +114,9 @@ impl App {
         commands
     }
 
-    pub fn pending(&self) -> Vec<&File> {
+    pub fn pending(&mut self) -> Vec<&mut File> {
         self.files
-            .iter()
+            .iter_mut()
             .filter(|file| {
                 vec![
                     FileState::Analyzing,
@@ -128,24 +130,31 @@ impl App {
             .collect()
     }
 
-    pub fn duplicate(&self) -> Vec<&File> {
+    pub fn duplicate(&mut self) -> Vec<&mut File> {
         self.files
-            .iter()
+            .iter_mut()
             .filter(|file| file.state == FileState::Duplicate)
             .collect()
     }
 
-    pub fn completed(&self) -> Vec<&File> {
+    pub fn completed(&mut self) -> Vec<&mut File> {
         self.files
-            .iter()
+            .iter_mut()
             .filter(|file| file.state == FileState::Completed)
             .collect()
     }
 
-    pub fn failed(&self) -> Vec<&File> {
+    pub fn failed(&mut self) -> Vec<&mut File> {
         self.files
-            .iter()
+            .iter_mut()
             .filter(|file| file.state == FileState::Failed)
+            .collect()
+    }
+
+    pub fn queued(&mut self) -> Vec<&mut File> {
+        self.files
+            .iter_mut()
+            .filter(|file| file.state == FileState::Queued)
             .collect()
     }
 }
@@ -156,7 +165,30 @@ impl Application for App {
     type Flags = ();
 
     fn new(_flags: ()) -> (App, Command<Message>) {
-        (App::default(), Command::none())
+        let api_key = config::read_api_key().ok();
+
+        let cmd = match api_key {
+            Some(api_key) => {
+                let config = api::Config::new(api_key.clone());
+
+                Command::perform(
+                    async move {
+                        let config = api::Config::new(api_key.clone());
+                        let response = api::User::get(&config).await;
+                        response
+                    },
+                    move |resp| match resp {
+                        Ok(user) => Message::SetConfigAndUser(config.clone(), user),
+                        Err(e) => Message::WelcomeMessage(scenes::WelcomeMessage::SetDisplayError(
+                            e.to_string(),
+                        )),
+                    },
+                )
+            }
+            None => Command::none(),
+        };
+
+        (App::default(), cmd)
     }
 
     fn title(&self) -> String {
@@ -227,6 +259,8 @@ impl Application for App {
                 return self.welcome_scene.update(msg);
             }
             Message::SetConfigAndUser(config, user) => {
+                let _ = config::write_api_key(&config.api_token);
+
                 self.current_config = Some(config);
                 self.current_user = Some(user);
                 self.current_scene = Scenes::FileIndex;
@@ -268,22 +302,20 @@ impl Application for App {
         match self.current_scene {
             Scenes::Welcome => self.welcome_scene.view().map(Message::WelcomeMessage),
             Scenes::FileIndex => {
-                let pending = self.pending();
-                let duplicate = self.duplicate();
-                let completed = self.completed();
-                let failed = self.failed();
-                let pending_count = pending.len();
-                let duplicate_count = duplicate.len();
-                let completed_count = completed.len();
-                let failed_count = failed.len();
+                let pending_count = self.pending().len();
+                let queued_count = self.queued().len();
+                let completed_count = self.completed().len();
+                let duplicate_count = self.duplicate().len();
+                let failed_count = self.failed().len();
+
                 let is_empty = self.files.is_empty();
 
-                let files = match self.current_filter {
-                    Filter::Pending => pending,
-                    Filter::Duplicate => duplicate,
-                    Filter::Completed => completed,
-                    Filter::Failed => failed,
-                };
+                let current_filter = self.current_filter;
+                let files = self
+                    .files
+                    .iter_mut()
+                    .filter(|file| current_filter.states().contains(&file.state))
+                    .collect();
 
                 let file_index = file::file_index(files);
 
@@ -320,10 +352,10 @@ impl Application for App {
                     )
                     .push(
                         Button::new(
-                            &mut self.duplicate_button,
-                            styles::text(format!("Duplicate ({})", duplicate_count)),
+                            &mut self.queued_button,
+                            styles::text(format!("Queued ({})", queued_count)),
                         )
-                        .on_press(Message::SetFilter(Filter::Duplicate))
+                        .on_press(Message::SetFilter(Filter::Queued))
                         .style(styles::Button::Transparent),
                     )
                     .push(
@@ -332,6 +364,14 @@ impl Application for App {
                             styles::text(format!("Completed ({})", completed_count)),
                         )
                         .on_press(Message::SetFilter(Filter::Completed))
+                        .style(styles::Button::Transparent),
+                    )
+                    .push(
+                        Button::new(
+                            &mut self.duplicate_button,
+                            styles::text(format!("Duplicate ({})", duplicate_count)),
+                        )
+                        .on_press(Message::SetFilter(Filter::Duplicate))
                         .style(styles::Button::Transparent),
                     )
                     .push(
