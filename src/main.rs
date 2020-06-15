@@ -39,7 +39,7 @@ pub fn main() {
     App::run(settings)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileSelection {
     None,
     Single(usize),
@@ -341,10 +341,15 @@ impl Application for App {
                     self.file_selection = FileSelection::Single(selected_idx);
                 }
                 FileSelection::Single(first_idx) => {
+                    if *first_idx == selected_idx {
+                        self.file_selection = FileSelection::None;
+                        return Command::none();
+                    }
+
                     if self.left_shift {
                         let min = std::cmp::min(first_idx, &selected_idx);
-                        let max = std::cmp::max(first_idx, &selected_idx);
-                        let selection = (*min..*max).collect();
+                        let max = std::cmp::max(first_idx, &selected_idx) + 1;
+                        let selection = (*min..max).collect();
                         self.file_selection = FileSelection::Multiple(selection);
                     } else if self.left_control {
                         if *first_idx != selected_idx {
@@ -359,13 +364,21 @@ impl Application for App {
                     if self.left_shift {
                         let first_idx = indices.first().unwrap();
                         let min = std::cmp::min(first_idx, &selected_idx);
-                        let max = std::cmp::max(first_idx, &selected_idx);
-                        let selection = (*min..*max).collect();
+                        let max = std::cmp::max(first_idx, &selected_idx) + 1;
+                        let selection = (*min..max).collect();
                         self.file_selection = FileSelection::Multiple(selection);
                     } else if self.left_control {
                         if !indices.contains(&selected_idx) {
                             self.file_selection = FileSelection::Multiple(
                                 [indices.as_slice(), &[selected_idx]].concat(),
+                            );
+                        } else {
+                            self.file_selection = FileSelection::Multiple(
+                                indices
+                                    .into_iter()
+                                    .filter(|idx| **idx != selected_idx)
+                                    .map(|idx| *idx)
+                                    .collect(),
                             );
                         }
                     } else {
@@ -408,7 +421,7 @@ impl Application for App {
                     .height(Length::FillPortion(5))
                     .push(file_index);
 
-                let bottom_bar = Container::new(
+                let mut bottom_bar = Row::new().push(
                     styles::text(format!(
                         "Logged in as: {}",
                         self.current_user.as_ref().unwrap().username
@@ -416,11 +429,21 @@ impl Application for App {
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .vertical_alignment(VerticalAlignment::Center),
-                )
-                .height(Length::Units(30))
-                .width(Length::Fill)
-                .padding(6)
-                .style(styles::Container::Secondary);
+                );
+
+                bottom_bar = match self.file_selection {
+                    FileSelection::Single(_) => bottom_bar.push(styles::text("1 file selected")),
+                    FileSelection::Multiple(ref indices) => {
+                        bottom_bar.push(styles::text(format!("{} files selected", indices.len())))
+                    }
+                    FileSelection::None => bottom_bar,
+                };
+
+                let bottom_bar_container = Container::new(bottom_bar)
+                    .height(Length::Units(30))
+                    .width(Length::Fill)
+                    .padding(6)
+                    .style(styles::Container::Secondary);
 
                 let filter_bar = Row::new()
                     .width(Length::Fill)
@@ -484,7 +507,7 @@ impl Application for App {
                             .center_x()
                             .center_y(),
                         )
-                        .push(bottom_bar)
+                        .push(bottom_bar_container)
                         .align_items(Align::Center)
                 } else {
                     Column::new()
@@ -492,7 +515,7 @@ impl Application for App {
                         .height(Length::Fill)
                         .push(filter_bar)
                         .push(top_view)
-                        .push(bottom_bar)
+                        .push(bottom_bar_container)
                 };
 
                 Container::new(content)
