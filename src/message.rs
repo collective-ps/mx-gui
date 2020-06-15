@@ -46,5 +46,6 @@ pub enum Message {
   DuplicateCheckResponse(Vec<String>, Vec<String>),
   SetFilter(Filter),
   SelectFile(usize),
+  SetTags(String),
   Noop,
 }

@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use iced::{
-    button, executor, scrollable, Align, Application, Button, Color, Column, Command, Container,
-    Element, Length, Row, Scrollable, Settings, Subscription, Text, VerticalAlignment,
+    button, executor, scrollable, text_input, Align, Application, Button, Color, Column, Command,
+    Container, Element, Length, Row, Scrollable, Settings, Subscription, Text, TextInput,
+    VerticalAlignment,
 };
 use iced_native::input::keyboard::{Event as KeyboardEvent, KeyCode};
 use iced_native::input::ButtonState;
@@ -84,6 +85,9 @@ struct App {
     left_control: bool,
 
     file_selection: FileSelection,
+    enqueue_button: button::State,
+    tag_input: text_input::State,
+    tags: String,
 }
 
 impl App {
@@ -386,6 +390,9 @@ impl Application for App {
                     }
                 }
             },
+            Message::SetTags(tags) => {
+                self.tags = tags;
+            }
         };
 
         Command::none()
@@ -421,21 +428,37 @@ impl Application for App {
                     .height(Length::FillPortion(5))
                     .push(file_index);
 
-                let mut bottom_bar = Row::new().push(
-                    styles::text(format!(
-                        "Logged in as: {}",
-                        self.current_user.as_ref().unwrap().username
+                let mut bottom_bar = Row::new()
+                    .push(
+                        styles::text(format!(
+                            "Logged in as: {}",
+                            self.current_user.as_ref().unwrap().username
+                        ))
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .vertical_alignment(VerticalAlignment::Center),
+                    )
+                    .spacing(3);
+
+                let file_form = Row::new()
+                    .push(TextInput::new(
+                        &mut self.tag_input,
+                        "Enter in tags",
+                        &self.tags,
+                        Message::SetTags,
                     ))
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .vertical_alignment(VerticalAlignment::Center),
-                );
+                    .push(
+                        Button::new(&mut self.enqueue_button, styles::text("Add to Queue"))
+                            .padding(0),
+                    );
 
                 bottom_bar = match self.file_selection {
-                    FileSelection::Single(_) => bottom_bar.push(styles::text("1 file selected")),
-                    FileSelection::Multiple(ref indices) => {
-                        bottom_bar.push(styles::text(format!("{} files selected", indices.len())))
-                    }
+                    FileSelection::Single(_) => bottom_bar
+                        .push(file_form)
+                        .push(styles::text("1 file selected")),
+                    FileSelection::Multiple(ref indices) => bottom_bar
+                        .push(file_form)
+                        .push(styles::text(format!("{} files selected", indices.len()))),
                     FileSelection::None => bottom_bar,
                 };
 
