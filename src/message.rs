@@ -45,5 +45,6 @@ pub enum Message {
   SetConfigAndUser(Config, User),
   DuplicateCheckResponse(Vec<String>, Vec<String>),
   SetFilter(Filter),
+  SelectFile(usize),
   Noop,
 }

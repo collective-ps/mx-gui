@@ -4,6 +4,8 @@ use iced::{
     button, executor, scrollable, Align, Application, Button, Color, Column, Command, Container,
     Element, Length, Row, Scrollable, Settings, Subscription, Text, VerticalAlignment,
 };
+use iced_native::input::keyboard::{Event as KeyboardEvent, KeyCode};
+use iced_native::input::ButtonState;
 use iced_native::window::Event as WindowEvent;
 use iced_native::Event;
 use walkdir::WalkDir;
@@ -37,6 +39,19 @@ pub fn main() {
     App::run(settings)
 }
 
+#[derive(Debug)]
+pub enum FileSelection {
+    None,
+    Single(usize),
+    Multiple(Vec<usize>),
+}
+
+impl Default for FileSelection {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Debug, Default)]
 struct App {
     id_counter: u64,
@@ -61,6 +76,14 @@ struct App {
 
     // Scenes::Welcome
     welcome_scene: WelcomeScene,
+
+    // Is left shift pressed?
+    left_shift: bool,
+
+    // Is left control pressed?
+    left_control: bool,
+
+    file_selection: FileSelection,
 }
 
 impl App {
@@ -212,6 +235,29 @@ impl Application for App {
                         return Command::batch(commands);
                     }
                 }
+                Event::Keyboard(KeyboardEvent::Input {
+                    state, key_code, ..
+                }) => {
+                    if key_code == KeyCode::LShift {
+                        match state {
+                            ButtonState::Pressed => {
+                                self.left_shift = true;
+                            }
+                            ButtonState::Released => {
+                                self.left_shift = false;
+                            }
+                        }
+                    } else if key_code == KeyCode::LControl {
+                        match state {
+                            ButtonState::Pressed => {
+                                self.left_control = true;
+                            }
+                            ButtonState::Released => {
+                                self.left_control = false;
+                            }
+                        }
+                    }
+                }
                 _ => {}
             },
             Message::FileAnalyzed(id, result) => match result {
@@ -288,7 +334,45 @@ impl Application for App {
             }
             Message::SetFilter(filter) => {
                 self.current_filter = filter;
+                self.file_selection = FileSelection::None;
             }
+            Message::SelectFile(selected_idx) => match &self.file_selection {
+                FileSelection::None => {
+                    self.file_selection = FileSelection::Single(selected_idx);
+                }
+                FileSelection::Single(first_idx) => {
+                    if self.left_shift {
+                        let min = std::cmp::min(first_idx, &selected_idx);
+                        let max = std::cmp::max(first_idx, &selected_idx);
+                        let selection = (*min..*max).collect();
+                        self.file_selection = FileSelection::Multiple(selection);
+                    } else if self.left_control {
+                        if *first_idx != selected_idx {
+                            self.file_selection =
+                                FileSelection::Multiple(vec![*first_idx, selected_idx]);
+                        }
+                    } else {
+                        self.file_selection = FileSelection::Single(selected_idx);
+                    }
+                }
+                FileSelection::Multiple(indices) => {
+                    if self.left_shift {
+                        let first_idx = indices.first().unwrap();
+                        let min = std::cmp::min(first_idx, &selected_idx);
+                        let max = std::cmp::max(first_idx, &selected_idx);
+                        let selection = (*min..*max).collect();
+                        self.file_selection = FileSelection::Multiple(selection);
+                    } else if self.left_control {
+                        if !indices.contains(&selected_idx) {
+                            self.file_selection = FileSelection::Multiple(
+                                [indices.as_slice(), &[selected_idx]].concat(),
+                            );
+                        }
+                    } else {
+                        self.file_selection = FileSelection::Single(selected_idx);
+                    }
+                }
+            },
         };
 
         Command::none()
@@ -317,7 +401,7 @@ impl Application for App {
                     .filter(|file| current_filter.states().contains(&file.state))
                     .collect();
 
-                let file_index = file::file_index(files);
+                let file_index = file::file_index(&self.file_selection, files);
 
                 let file_scroll_view = Scrollable::new(&mut self.file_scrollable)
                     .width(Length::Fill)

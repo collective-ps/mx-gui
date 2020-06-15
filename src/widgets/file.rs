@@ -6,6 +6,7 @@ use iced::{
 
 use crate::message::Message;
 use crate::styles;
+use crate::FileSelection;
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq)]
@@ -73,38 +74,57 @@ pub enum AnalyzeError {
 
 pub type AnalyzeResult = Result<FileAnalysis, AnalyzeError>;
 
-pub fn file_index<'a>(files: Vec<&'a mut File>) -> Element<'a, Message> {
+pub fn file_index<'a>(
+  file_selection: &FileSelection,
+  files: Vec<&'a mut File>,
+) -> Element<'a, Message> {
   let mut file_names = Column::new()
     .spacing(2)
-    .push(styles::text("File Name").vertical_alignment(VerticalAlignment::Center))
-    .height(Length::Fill);
+    .push(styles::text("File Name").vertical_alignment(VerticalAlignment::Center));
   let mut status = Column::new()
     .spacing(2)
-    .push(styles::text("Status").vertical_alignment(VerticalAlignment::Center))
-    .height(Length::Fill);
+    .push(styles::text("Status").vertical_alignment(VerticalAlignment::Center));
   let mut md5 = Column::new()
     .spacing(2)
-    .push(styles::text("MD5").vertical_alignment(VerticalAlignment::Center))
-    .height(Length::Fill);
+    .push(styles::text("MD5").vertical_alignment(VerticalAlignment::Center));
   let mut tags = Column::new()
     .spacing(2)
-    .push(styles::text("Tags").vertical_alignment(VerticalAlignment::Center))
-    .height(Length::Fill);
+    .push(styles::text("Tags").vertical_alignment(VerticalAlignment::Center));
 
-  for file in files {
+  for (idx, file) in files.into_iter().enumerate() {
     let file_md5 = file.get_md5();
     let file_name = file.truncated_file_name();
+    let selected = match file_selection {
+      FileSelection::None => false,
+      FileSelection::Single(matching_idx) => idx == *matching_idx,
+      FileSelection::Multiple(indices) => indices.contains(&idx),
+    };
 
     file_names = file_names.push(
-      Button::new(&mut file.button, styles::text(file_name))
-        .style(styles::Button::Transparent)
-        .padding(0),
+      Container::new(
+        Button::new(&mut file.button, styles::text(file_name))
+          .style(styles::Button::Transparent)
+          .on_press(Message::SelectFile(idx))
+          .padding(2),
+      )
+      .padding(0)
+      .style(styles::HoveredContainer::new(selected)),
     );
-    status = status.push(Container::new(styles::text(file.state.to_string())).height(Length::Fill));
-    md5 = md5.push(Container::new(styles::text(file_md5)).height(Length::Fill));
-    tags = tags
-      .push(Container::new(styles::text(&file.tags)))
-      .height(Length::Fill);
+    status = status.push(
+      Container::new(styles::text(file.state.to_string()))
+        .padding(2)
+        .style(styles::HoveredContainer::new(selected)),
+    );
+    md5 = md5.push(
+      Container::new(styles::text(file_md5))
+        .padding(2)
+        .style(styles::HoveredContainer::new(selected)),
+    );
+    tags = tags.push(
+      Container::new(styles::text(&file.tags))
+        .padding(2)
+        .style(styles::HoveredContainer::new(selected)),
+    );
   }
 
   let content = Row::new()
