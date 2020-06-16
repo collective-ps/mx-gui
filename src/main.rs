@@ -393,6 +393,34 @@ impl Application for App {
             Message::SetTags(tags) => {
                 self.tags = tags;
             }
+            Message::Enqueue => {
+                let current_filter = self.current_filter;
+                let mut files: Vec<&mut File> = self
+                    .files
+                    .iter_mut()
+                    .filter(|file| current_filter.states().contains(&file.state))
+                    .collect();
+                match &self.file_selection {
+                    FileSelection::None => return Command::none(),
+                    FileSelection::Single(selected_idx) => {
+                        for (idx, file) in files.iter_mut().enumerate() {
+                            if *selected_idx == idx {
+                                file.state = FileState::Queued;
+                                return Command::none();
+                            }
+                        }
+                    }
+                    FileSelection::Multiple(indices) => {
+                        for (idx, file) in files.iter_mut().enumerate() {
+                            if indices.contains(&idx) {
+                                file.state = FileState::Queued;
+                            }
+                        }
+
+                        return Command::none();
+                    }
+                }
+            }
         };
 
         Command::none()
@@ -449,7 +477,8 @@ impl Application for App {
                     ))
                     .push(
                         Button::new(&mut self.enqueue_button, styles::text("Add to Queue"))
-                            .padding(0),
+                            .padding(0)
+                            .on_press(Message::Enqueue),
                     );
 
                 bottom_bar = match self.file_selection {

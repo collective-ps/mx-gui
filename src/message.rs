@@ -47,5 +47,6 @@ pub enum Message {
   SetFilter(Filter),
   SelectFile(usize),
   SetTags(String),
+  Enqueue,
   Noop,
 }
