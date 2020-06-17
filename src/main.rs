@@ -43,7 +43,6 @@ pub fn main() {
 #[derive(Debug, PartialEq)]
 pub enum FileSelection {
     None,
-    Single(usize),
     Multiple(Vec<usize>),
 }
 
@@ -183,6 +182,43 @@ impl App {
             .iter_mut()
             .filter(|file| file.state == FileState::Queued)
             .collect()
+    }
+
+    pub fn get_tags_from_selection(&self) -> Option<String> {
+        let current_filter = self.current_filter;
+        let files: Vec<&File> = self
+            .files
+            .iter()
+            .filter(|file| current_filter.states().contains(&file.state))
+            .collect();
+        let mut selected_files: Vec<&File> = Vec::new();
+
+        match &self.file_selection {
+            FileSelection::None => return None,
+            FileSelection::Multiple(indices) => {
+                for (idx, file) in files.iter().enumerate() {
+                    if indices.contains(&idx) {
+                        selected_files.push(file);
+                    }
+                }
+            }
+        }
+
+        let mut tags: Option<String> = None;
+
+        for (idx, file) in selected_files.iter().enumerate() {
+            if idx == 0 {
+                tags = Some(file.tags.clone());
+            }
+
+            if let Some(ref current_tags) = tags {
+                if current_tags != &file.tags {
+                    tags = None;
+                }
+            }
+        }
+
+        return tags;
     }
 }
 
@@ -342,27 +378,7 @@ impl Application for App {
             }
             Message::SelectFile(selected_idx) => match &self.file_selection {
                 FileSelection::None => {
-                    self.file_selection = FileSelection::Single(selected_idx);
-                }
-                FileSelection::Single(first_idx) => {
-                    if *first_idx == selected_idx {
-                        self.file_selection = FileSelection::None;
-                        return Command::none();
-                    }
-
-                    if self.left_shift {
-                        let min = std::cmp::min(first_idx, &selected_idx);
-                        let max = std::cmp::max(first_idx, &selected_idx) + 1;
-                        let selection = (*min..max).collect();
-                        self.file_selection = FileSelection::Multiple(selection);
-                    } else if self.left_control {
-                        if *first_idx != selected_idx {
-                            self.file_selection =
-                                FileSelection::Multiple(vec![*first_idx, selected_idx]);
-                        }
-                    } else {
-                        self.file_selection = FileSelection::Single(selected_idx);
-                    }
+                    self.file_selection = FileSelection::Multiple(vec![selected_idx]);
                 }
                 FileSelection::Multiple(indices) => {
                     if self.left_shift {
@@ -386,12 +402,33 @@ impl Application for App {
                             );
                         }
                     } else {
-                        self.file_selection = FileSelection::Single(selected_idx);
+                        self.file_selection = FileSelection::Multiple(vec![selected_idx]);
                     }
+
+                    self.tags = self.get_tags_from_selection().unwrap_or_default();
                 }
             },
             Message::SetTags(tags) => {
+                let new_tags = tags.clone();
                 self.tags = tags;
+                let current_filter = self.current_filter;
+                let mut files: Vec<&mut File> = self
+                    .files
+                    .iter_mut()
+                    .filter(|file| current_filter.states().contains(&file.state))
+                    .collect();
+                match &self.file_selection {
+                    FileSelection::None => return Command::none(),
+                    FileSelection::Multiple(indices) => {
+                        for (idx, file) in files.iter_mut().enumerate() {
+                            if indices.contains(&idx) {
+                                file.tags = new_tags.clone();
+                            }
+                        }
+
+                        return Command::none();
+                    }
+                }
             }
             Message::Enqueue => {
                 let current_filter = self.current_filter;
@@ -402,20 +439,15 @@ impl Application for App {
                     .collect();
                 match &self.file_selection {
                     FileSelection::None => return Command::none(),
-                    FileSelection::Single(selected_idx) => {
-                        for (idx, file) in files.iter_mut().enumerate() {
-                            if *selected_idx == idx {
-                                file.state = FileState::Queued;
-                                return Command::none();
-                            }
-                        }
-                    }
                     FileSelection::Multiple(indices) => {
                         for (idx, file) in files.iter_mut().enumerate() {
                             if indices.contains(&idx) {
                                 file.state = FileState::Queued;
                             }
                         }
+
+                        self.tags = "".to_string();
+                        self.file_selection = FileSelection::None;
 
                         return Command::none();
                     }
@@ -469,22 +501,24 @@ impl Application for App {
                     .spacing(3);
 
                 let file_form = Row::new()
-                    .push(TextInput::new(
-                        &mut self.tag_input,
-                        "Enter in tags",
-                        &self.tags,
-                        Message::SetTags,
-                    ))
+                    .push(
+                        TextInput::new(
+                            &mut self.tag_input,
+                            "Enter in tags",
+                            &self.tags,
+                            Message::SetTags,
+                        )
+                        .style(styles::TextInput::Primary)
+                        .width(Length::Fill),
+                    )
                     .push(
                         Button::new(&mut self.enqueue_button, styles::text("Add to Queue"))
-                            .padding(0)
+                            .style(styles::Button::Transparent)
+                            .padding(2)
                             .on_press(Message::Enqueue),
                     );
 
                 bottom_bar = match self.file_selection {
-                    FileSelection::Single(_) => bottom_bar
-                        .push(file_form)
-                        .push(styles::text("1 file selected")),
                     FileSelection::Multiple(ref indices) => bottom_bar
                         .push(file_form)
                         .push(styles::text(format!("{} files selected", indices.len()))),

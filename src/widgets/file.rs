@@ -96,7 +96,6 @@ pub fn file_index<'a>(
     let file_name = file.truncated_file_name();
     let selected = match file_selection {
       FileSelection::None => false,
-      FileSelection::Single(matching_idx) => idx == *matching_idx,
       FileSelection::Multiple(indices) => indices.contains(&idx),
     };
 
