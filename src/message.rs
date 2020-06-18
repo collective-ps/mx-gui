@@ -2,7 +2,7 @@ use crate::api::{Config, User};
 use crate::scenes::WelcomeMessage;
 use crate::widgets::file::{AnalyzeResult, FileMessage, FileState};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Filter {
   Pending,
   Duplicate,
@@ -48,5 +48,8 @@ pub enum Message {
   SelectFile(usize),
   SetTags(String),
   Enqueue,
+  StartUpload,
+  SuccessfulUpload(u64),
+  FailedUpload(u64),
   Noop,
 }

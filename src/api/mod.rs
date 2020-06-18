@@ -1,8 +1,12 @@
-use reqwest::{Client, Response, StatusCode};
+use std::path::PathBuf;
+
+use reqwest::{Body, Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
+use tokio::fs::File;
+use tokio_util::codec::{BytesCodec, FramedRead};
 
 /// Configuration used for making API requests.
 #[derive(Debug, Clone)]
@@ -71,6 +75,76 @@ impl Checksums {
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
       .json(&json!({ "checksums": checksums }))
+      .send()
+      .await;
+
+    handle_response(response).await
+  }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Upload {
+  pub id: String,
+  pub url: String,
+}
+
+impl Upload {
+  pub async fn new(config: &Config, path: &PathBuf, md5_hash: &str) -> Result<Self, ApiError> {
+    let endpoint = format!("{}/api/v1/uploads", config.host);
+
+    let metadata = std::fs::metadata(&path).unwrap();
+    let file_name = path.file_name().unwrap().to_str().unwrap();
+    let file_size = metadata.len() as i64;
+
+    let new_upload_request = json!({
+      "file_name": file_name,
+      "content_length": file_size,
+      "md5_hash": md5_hash,
+    });
+
+    let response = Client::new()
+      .post(&endpoint)
+      .header("content-type", "application/json")
+      .header("authorization", format!("Bearer {}", config.api_token))
+      .json(&new_upload_request)
+      .send()
+      .await;
+
+    handle_response(response).await
+  }
+
+  pub async fn upload_file(path: &PathBuf, url: &str) -> Result<(), ApiError> {
+    let file = File::open(path).await.unwrap();
+    let stream = FramedRead::new(file, BytesCodec::new());
+    let body = Body::wrap_stream(stream);
+    let response = Client::new().put(url).body(body).send().await;
+
+    response
+      .map_err(|_| ApiError::ServerUnavailable)
+      .map(|_| ())
+  }
+
+  pub async fn finalize(
+    config: &Config,
+    id: &str,
+    tags: &str,
+    source: &str,
+    description: &str,
+  ) -> Result<Self, ApiError> {
+    let endpoint = format!("{}/api/v1/uploads/finalize", config.host);
+
+    let finalize_request = json!({
+      "id": id,
+      "tags": tags,
+      "source": source,
+      "description": description,
+    });
+
+    let response = Client::new()
+      .post(&endpoint)
+      .header("content-type", "application/json")
+      .header("authorization", format!("Bearer {}", config.api_token))
+      .json(&finalize_request)
       .send()
       .await;
 

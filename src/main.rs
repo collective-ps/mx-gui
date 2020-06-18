@@ -85,6 +85,7 @@ struct App {
 
     file_selection: FileSelection,
     enqueue_button: button::State,
+    upload_button: button::State,
     tag_input: text_input::State,
     tags: String,
 }
@@ -453,6 +454,51 @@ impl Application for App {
                     }
                 }
             }
+            Message::StartUpload => {
+                let config = self.current_config.clone().unwrap();
+
+                let commands: Vec<Command<Message>> = self
+                    .queued()
+                    .iter_mut()
+                    .map(|file| {
+                        let id = file.id.clone();
+                        let path = file.path.clone();
+                        let md5 = file.get_md5();
+                        let tags = file.tags.clone();
+                        let api_config = config.clone();
+
+                        file.state = FileState::Uploading;
+
+                        Command::perform(
+                            async move {
+                                let result = api::Upload::new(&api_config, &path, &md5).await?;
+                                let _ = api::Upload::upload_file(&path, &result.url).await?;
+                                let _ =
+                                    api::Upload::finalize(&api_config, &result.id, &tags, "", "")
+                                        .await?;
+
+                                Ok(())
+                            },
+                            move |response: Result<(), api::ApiError>| match response {
+                                Ok(_) => Message::SuccessfulUpload(id),
+                                Err(_) => Message::FailedUpload(id),
+                            },
+                        )
+                    })
+                    .collect();
+
+                return Command::batch(commands);
+            }
+            Message::SuccessfulUpload(id) => {
+                if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
+                    file.state = FileState::Completed;
+                }
+            }
+            Message::FailedUpload(id) => {
+                if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
+                    file.state = FileState::Failed;
+                }
+            }
         };
 
         Command::none()
@@ -518,12 +564,21 @@ impl Application for App {
                             .on_press(Message::Enqueue),
                     );
 
-                bottom_bar = match self.file_selection {
-                    FileSelection::Multiple(ref indices) => bottom_bar
-                        .push(file_form)
-                        .push(styles::text(format!("{} files selected", indices.len()))),
-                    FileSelection::None => bottom_bar,
-                };
+                if self.current_filter != Filter::Queued {
+                    bottom_bar = match self.file_selection {
+                        FileSelection::Multiple(ref indices) => bottom_bar
+                            .push(file_form)
+                            .push(styles::text(format!("{} files selected", indices.len()))),
+                        FileSelection::None => bottom_bar,
+                    };
+                } else {
+                    bottom_bar = bottom_bar.push(
+                        Button::new(&mut self.upload_button, styles::text("Upload All"))
+                            .style(styles::Button::Transparent)
+                            .on_press(Message::StartUpload)
+                            .padding(2),
+                    );
+                }
 
                 let bottom_bar_container = Container::new(bottom_bar)
                     .height(Length::Units(30))
