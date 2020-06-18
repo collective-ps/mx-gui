@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use reqwest::{Body, Client, Response, StatusCode};
 use serde::de::DeserializeOwned;
@@ -6,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use thiserror::Error;
 use tokio::fs::File;
+use tokio::time::delay_for;
 use tokio_util::codec::{BytesCodec, FramedRead};
 
 /// Configuration used for making API requests.
@@ -22,6 +24,10 @@ impl Config {
       host: "https://spin-archive.org".to_owned(),
     }
   }
+}
+
+fn client() -> Client {
+  Client::builder().pool_max_idle_per_host(5).build().unwrap()
 }
 
 #[derive(Error, Debug)]
@@ -50,7 +56,7 @@ impl User {
   pub async fn get(config: &Config) -> Result<Self, ApiError> {
     let endpoint = format!("{}/api/v1/me", config.host);
 
-    let response = Client::new()
+    let response = client()
       .get(&endpoint)
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
@@ -70,7 +76,7 @@ impl Checksums {
   pub async fn check(checksums: &Vec<String>, config: &Config) -> Result<Self, ApiError> {
     let endpoint = format!("{}/api/v1/uploads/checksum", config.host);
 
-    let response = Client::new()
+    let response = client()
       .post(&endpoint)
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
@@ -96,13 +102,15 @@ impl Upload {
     let file_name = path.file_name().unwrap().to_str().unwrap();
     let file_size = metadata.len() as i64;
 
+    let _ = delay_for(Duration::from_millis(100)).await;
+
     let new_upload_request = json!({
       "file_name": file_name,
       "content_length": file_size,
       "md5_hash": md5_hash,
     });
 
-    let response = Client::new()
+    let response = client()
       .post(&endpoint)
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
@@ -117,7 +125,10 @@ impl Upload {
     let file = File::open(path).await.unwrap();
     let stream = FramedRead::new(file, BytesCodec::new());
     let body = Body::wrap_stream(stream);
-    let response = Client::new().put(url).body(body).send().await;
+
+    let _ = delay_for(Duration::from_millis(100)).await;
+
+    let response = client().put(url).body(body).send().await;
 
     response
       .map_err(|_| ApiError::ServerUnavailable)
@@ -140,7 +151,9 @@ impl Upload {
       "description": description,
     });
 
-    let response = Client::new()
+    let _ = delay_for(Duration::from_millis(100)).await;
+
+    let response = client()
       .post(&endpoint)
       .header("content-type", "application/json")
       .header("authorization", format!("Bearer {}", config.api_token))
@@ -161,6 +174,8 @@ async fn handle_response<T: DeserializeOwned>(
         return Err(ApiError::ApiKeyError);
       }
       status => {
+        dbg!(&status);
+
         if status.is_success() {
           match response.json().await {
             Ok(json) => Ok(json),

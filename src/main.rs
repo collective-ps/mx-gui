@@ -481,7 +481,10 @@ impl Application for App {
                             },
                             move |response: Result<(), api::ApiError>| match response {
                                 Ok(_) => Message::SuccessfulUpload(id),
-                                Err(_) => Message::FailedUpload(id),
+                                Err(err) => {
+                                    dbg!(err);
+                                    Message::FailedUpload(id)
+                                }
                             },
                         )
                     })
