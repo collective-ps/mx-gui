@@ -150,7 +150,6 @@ impl App {
                     FileState::Analyzed,
                     FileState::Pending,
                     FileState::CheckingDuplicate,
-                    FileState::Uploading,
                 ]
                 .contains(&file.state)
             })
@@ -181,7 +180,14 @@ impl App {
     pub fn queued(&mut self) -> Vec<&mut File> {
         self.files
             .iter_mut()
-            .filter(|file| file.state == FileState::Queued)
+            .filter(|file| vec![FileState::Queued, FileState::Uploading].contains(&file.state))
+            .collect()
+    }
+
+    pub fn uploading(&mut self) -> Vec<&mut File> {
+        self.files
+            .iter_mut()
+            .filter(|file| file.state == FileState::Uploading)
             .collect()
     }
 
@@ -455,11 +461,19 @@ impl Application for App {
                 }
             }
             Message::StartUpload => {
+                for file in self.queued().iter_mut() {
+                    file.state = FileState::Uploading;
+                }
+
+                return self.update(Message::BeginUploadBatch);
+            }
+            Message::BeginUploadBatch => {
                 let config = self.current_config.clone().unwrap();
 
                 let commands: Vec<Command<Message>> = self
-                    .queued()
+                    .uploading()
                     .iter_mut()
+                    .take(1)
                     .map(|file| {
                         let id = file.id.clone();
                         let path = file.path.clone();
@@ -496,6 +510,8 @@ impl Application for App {
                 if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {
                     file.state = FileState::Completed;
                 }
+
+                return self.update(Message::BeginUploadBatch);
             }
             Message::FailedUpload(id) => {
                 if let Some(file) = self.files.iter_mut().find(|file| file.id == id) {

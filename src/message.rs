@@ -19,12 +19,11 @@ impl Filter {
         FileState::Analyzed,
         FileState::Pending,
         FileState::CheckingDuplicate,
-        FileState::Uploading,
       ],
       Filter::Duplicate => vec![FileState::Duplicate],
       Filter::Completed => vec![FileState::Completed],
       Filter::Failed => vec![FileState::Failed],
-      Filter::Queued => vec![FileState::Queued],
+      Filter::Queued => vec![FileState::Queued, FileState::Uploading],
     }
   }
 }
@@ -51,5 +50,6 @@ pub enum Message {
   StartUpload,
   SuccessfulUpload(u64),
   FailedUpload(u64),
+  BeginUploadBatch,
   Noop,
 }
